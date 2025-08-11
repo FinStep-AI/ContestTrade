@@ -247,7 +247,7 @@ class ContestTradeDisplay:
             footer_text = Text()
             footer_text.append("🔄 分析进行中...", style="bold yellow")
             if self.analysis_completed:
-                footer_text.append("\n✅ 分析完成！按任意键退出运行界面...", style="bold green")
+                footer_text.append("\n✅ 分析完成！按回车键退出运行界面...", style="bold green")
             footer_title = "📊 状态信息"
         
         footer_panel = Panel(
@@ -288,8 +288,8 @@ class ContestTradeDisplay:
                     summary_text.append(f"{symbol_name}({action}-{probability}%)", style="cyan")
                     if i < min(2, len(best_signals) - 1):
                         summary_text.append(", ", style="dim")
-            
-            summary_text.append("\n💡 输入 'd' 查看详细结果 | 'n' 运行新分析 | 'q' 退出", style="dim")
+
+            summary_text.append("\n💡分析完成，按回车退出运行界面...")
         else:
             summary_text.append("❌ 分析失败", style="red")
         
@@ -551,14 +551,14 @@ def ask_user_for_next_action(final_state):
                 display_detailed_report(final_state)
                 console.print("[dim]输入 'n' 运行新分析 | 'q' 退出[/dim]")
             elif user_input == 'n':
-                return final_state, None
+                return final_state, "new_analysis"
             elif user_input == 'q':
-                return final_state, None
+                return final_state, "quit"
             else:
                 console.print("[yellow]无效输入，请输入 'd', 'n' 或 'q'[/yellow]")
         except KeyboardInterrupt:
             console.print("\n[yellow]用户中断，退出...[/yellow]")
-            return final_state, None
+            return final_state, "quit"
 
 
 def display_detailed_report(final_state: Dict):
@@ -661,40 +661,20 @@ def run(
             break
             
         if isinstance(result, tuple):
-            final_state, display = result
+            final_state, action = result
+            if action == "new_analysis":
+                # 用户选择运行新分析
+                trigger_time = get_trigger_time()
+                continue
+            elif action == "quit":
+                # 用户选择退出
+                break
         else:
             final_state = result
             display = None
         
-        if final_state:
-            # 从step_results中获取正确的统计信息
-            step_results = final_state.get('step_results', {})
-            data_team_results = step_results.get('data_team', {})
-            research_team_results = step_results.get('research_team', {})
-            
-            data_factors_count = data_team_results.get('factors_count', 0)
-            research_signals_count = research_team_results.get('signals_count', 0)
-            total_events_count = data_team_results.get('events_count', 0) + research_team_results.get('events_count', 0)
-            
-            console.print(f"\n[green]✅ 分析完成![/green]")
-            console.print(f"[dim]数据因子: {data_factors_count}[/dim]")
-            console.print(f"[dim]研究信号: {research_signals_count}[/dim]")
-            console.print(f"[dim]总事件: {total_events_count}[/dim]")
-            
-            if interactive:
-                # 获取用户选择
-                continue_choice = input("输入 'n' 运行新分析，任意其他键退出: ").strip().lower()
-                if continue_choice == 'n':
-                    trigger_time = get_trigger_time()
-                    continue
-                else:
-                    break
-            else:
-                # 非交互模式直接退出
-                break
-        else:
-            console.print("[red]❌ 分析失败[/red]")
-            break
+        # 如果没有明确的下一步动作，就退出
+        break
     
     console.print("[green]感谢使用ContestTrade![/green]")
 
