@@ -7,7 +7,6 @@ ContestTrade 是一个由社区驱动的开源项目，我们相信，正是社�
 这份指南将引导您如何参与到 ContestTrade 的开发中来。
 
 **目录**
-- [🤝 行为准则](#-行为准则)
 - [💬 交流与沟通](#-交流与沟通)
 - [💡 如何贡献](#-如何贡献)
   - [🐛 报告 Bug](#-报告-bug)
@@ -16,9 +15,6 @@ ContestTrade 是一个由社区驱动的开源项目，我们相信，正是社�
 - [🛠️ 本地开发设置](#️-本地开发设置)
 - [🚀 Pull Request 流程](#-pull-request-流程)
 
-## 🤝 行为准则
-
-在参与社区贡献之前，请花一点时间阅读我们的 [行为准则 (CODE_OF_CONDUCT.md)](CODE_OF_CONDUCT.md)。我们希望为所有参与者创造一个友好、互相尊重、且富有建设性的协作环境。
 
 ## 💬 交流与沟通
 
@@ -27,9 +23,9 @@ ContestTrade 是一个由社区驱动的开源项目，我们相信，正是社�
 在您准备开始贡献代码或有任何技术疑问时，强烈建议您先加入社群，与我们进行沟通。我们每周会定期召开**线上开发者会议**，同步项目进展、讨论技术方案。
 
 <p align="center">
-  <img src="assets/contributor_group.jpg" style="width: 300px; height: auto;">
+  <img src="assets/contributor_group.jpg" style="width: 250px; height: auto;">
   <br>
-  <small>微信扫码，添加小助手，备注“ContestTrade开发者”入群</small>
+  <small>备注“ContestTrade开发者”入群</small>
 </p>
 
 ## 💡 如何贡献
