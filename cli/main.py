@@ -18,11 +18,13 @@ from rich.text import Text
 from rich.align import Align
 from rich import box
 
-from .utils import get_trigger_time, validate_config
+from .utils import get_trigger_time, validate_config, validate_required_services
 from .static.report_template import display_final_report_interactive
 from contest_trade.config.config import cfg, PROJECT_ROOT
 sys.path.append(str(PROJECT_ROOT))
 from contest_trade.main import SimpleTradeCompany
+from contest_trade.utils.tushare_utils import get_trade_date
+from contest_trade.models.llm_model import GLOBAL_LLM
 
 console = Console()
 
@@ -783,6 +785,11 @@ def run(
         console.print("[red]触发时间格式错误，请使用 YYYY-MM-DD HH:MM:SS 格式[/red]")
         raise typer.Exit(1)
     
+    # 验证必需的服务连接
+    if not validate_required_services():
+        console.print("[red]系统验证失败，无法启动分析[/red]")
+        raise typer.Exit(1)
+    
     # 主循环
     while True:
         try:
@@ -799,6 +806,9 @@ def run(
             final_state, action = result
             if action == "new_analysis":
                 trigger_time = get_trigger_time()
+                if not validate_required_services():
+                    console.print("[red]系统验证失败，无法启动分析[/red]")
+                    break
                 continue
             elif action == "quit":
                 break
