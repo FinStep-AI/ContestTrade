@@ -14,10 +14,10 @@ from pathlib import Path
 from openai import OpenAI, AsyncOpenAI
 from openai.types.chat import ChatCompletionChunk
 from typing import Dict, List, Optional, AsyncIterator, Callable
-from config.config import cfg
-
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
-sys.path.append(str(PROJECT_ROOT))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
+from config.config import cfg
 
 from models.base_agent_model import (
     BaseAgentModel,
@@ -70,7 +70,6 @@ class LLMModel(BaseAgentModel):
         self.base_url = config.base_url
         self.extra_headers = config.extra_headers
         self.proxys = config.proxys
-
         if self.api_key is None:
             self.api_key = os.environ.get("OPENAI_API_KEY")
         if self.base_url is None:
@@ -99,6 +98,7 @@ class LLMModel(BaseAgentModel):
     def _process_chunk(self, chunk: ChatCompletionChunk) -> StreamingChunk[str]:
         """Process a streaming chunk from OpenAI."""
         # Extract content from the chunk
+        #print(chunk.choices)
         if hasattr(chunk.choices[0].delta, 'reasoning_content') and chunk.choices[0].delta.reasoning_content:
             content = chunk.choices[0].delta.reasoning_content
             is_reasoning = True
@@ -341,6 +341,8 @@ class LLMModel(BaseAgentModel):
         # Create async iterator that processes chunks
         async def chunk_iterator() -> AsyncIterator[StreamingChunk[str]]:
             async for chunk in stream:
+                if not chunk.choices:
+                    continue
                 yield self._process_chunk(chunk)
         
         return AsyncResponseStream(
@@ -378,4 +380,15 @@ except Exception as e:
     GLOBAL_VISION_LLM = None
 
 if __name__ == "__main__":
-    pass
+    try:
+        print("🔍 [cyan]正在验证LLM配置...[/cyan]")
+        test_messages = [
+            {"role": "user", "content": "请回复'连接测试成功'，不要添加任何其他内容。"}
+        ]
+        result = GLOBAL_LLM.run(test_messages, max_tokens=100, temperature=0.1, max_retries=0)
+        if result and hasattr(result, 'content') and result.content:
+            print(f"✅ [green]LLM连接成功[/green] - 模型: {GLOBAL_LLM.model_name}")
+        else:
+            print("❌ [red]LLM连接失败 - 无响应内容[/red]")
+    except Exception as e:
+        print(f"❌ [red]LLM连接失败: {str(e)}[/red]")

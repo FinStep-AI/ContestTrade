@@ -6,19 +6,22 @@ fmp_key: "" #YOUR_FMP_KEY
 finnhub_key: "" #YOUR_FINNHUB_KEY
 
 llm:
-  base_url: "https://api.deepseek.com"
-  api_key: null #YOUR_DEEPSEEK_API_KEY
-  model_name: "deepseek-chat"
+
+  base_url: ""
+  api_key: "" #YOUR_DEEPSEEK_API_KEY
+  model_name: ""
 
 llm_thinking:
-  base_url: "https://api.deepseek.com"
-  api_key: null #YOUR_DEEPSEEK_API_KEY
-  model_name: "deepseek-reasoner"
+  base_url: ""
+  api_key: "" #YOUR_DEEPSEEK_API_KEY
+  model_name: ""
 
 vlm:
-  base_url: "https://api.stepfun.com/v1"
-  api_key: null #YOUR_STEPFUN_API_KEY
-  model_name: "step-1o-turbo-vision"
+  base_url: ""
+  api_key: "" #YOUR_DEEPSEEK_API_KEY
+  model_name: ""
+
+
 
 data_agents_config:
   - agent_name: "sina_summary_agent"
