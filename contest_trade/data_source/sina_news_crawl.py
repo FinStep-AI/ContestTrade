@@ -333,7 +333,8 @@ class SinaNewsCrawl(DataSourceBase):
             end_dt = pd.to_datetime(trigger_time, errors='coerce')
             mask = pd.Series(True, index=df.index)
             if not pd.isna(end_dt):
-                mask &= df['publish_time'] < end_dt
+                start_dt = end_dt - pd.Timedelta(days=1)
+                mask &= (df['publish_time'] >= start_dt) & (df['publish_time'] < end_dt)
             df = df.loc[mask].reset_index(drop=True)
             df['pub_time'] = df['publish_time'].dt.strftime("%Y-%m-%d %H:%M:%S")
         else:
@@ -358,7 +359,7 @@ class SinaNewsCrawl(DataSourceBase):
 
 if __name__ == "__main__":
     crawler = SinaNewsCrawl(start_page=1, end_page=50)
-    df = asyncio.run(crawler.get_data("2025-08-21 09:00:00"))
+    df = asyncio.run(crawler.get_data("2025-08-21 15:00:00"))
     print(len(df))
     # try:
     #     output_path = os.path.join(os.path.dirname(__file__), "sina_news_crawl.json")

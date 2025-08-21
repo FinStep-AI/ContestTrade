@@ -285,9 +285,10 @@ class ThxNewsCrawl(DataSourceBase):
             end_dt = pd.to_datetime(trigger_time, errors='coerce')
             
             if not pd.isna(end_dt):
-                mask = df['pub_time'] < end_dt
+                start_dt = end_dt - pd.Timedelta(days=1)
+                mask = (df['pub_time'] >= start_dt) & (df['pub_time'] < end_dt)
                 df = df.loc[mask].reset_index(drop=True)
-                logger.info(f"时间筛选后剩余 {len(df)} 条数据")
+                logger.info(f"时间筛选后剩余 {len(df)} 条数据（区间: {start_dt} 至 {end_dt}）")
             else:
                 logger.warning(f"无法解析时间: {trigger_time}")
         
@@ -316,7 +317,7 @@ class ThxNewsCrawl(DataSourceBase):
 
 if __name__ == "__main__":
     crawler = ThxNewsCrawl(max_pages=5, enable_frontend_crawl=True)
-    df = asyncio.run(crawler.get_data("2025-08-21 09:00:00"))
+    df = asyncio.run(crawler.get_data("2025-08-21 15:00:00"))
     print(f"Total records: {len(df)}")
     print(df.head())
     # try:
