@@ -17,7 +17,7 @@ llm_thinking:
 
 vlm:
   base_url: "https://api.stepfun.com/v1"
-  api_key: null #YOUR_DEEPSEEK_API_KEY
+  api_key: null #YOUR_STEPFUN_API_KEY
   model_name: "step-1o-turbo-vision"
 
 
