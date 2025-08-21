@@ -380,15 +380,4 @@ except Exception as e:
     GLOBAL_VISION_LLM = None
 
 if __name__ == "__main__":
-    try:
-        print("🔍 [cyan]正在验证LLM配置...[/cyan]")
-        test_messages = [
-            {"role": "user", "content": "请回复'连接测试成功'，不要添加任何其他内容。"}
-        ]
-        result = GLOBAL_LLM.run(test_messages, max_tokens=100, temperature=0.1, max_retries=0)
-        if result and hasattr(result, 'content') and result.content:
-            print(f"✅ [green]LLM连接成功[/green] - 模型: {GLOBAL_LLM.model_name}")
-        else:
-            print("❌ [red]LLM连接失败 - 无响应内容[/red]")
-    except Exception as e:
-        print(f"❌ [red]LLM连接失败: {str(e)}[/red]")
+    pass
