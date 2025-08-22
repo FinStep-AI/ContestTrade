@@ -4,6 +4,7 @@ ContestTrade: 基于内部竞赛机制的Multi-Agent交易系统
 import asyncio
 import sys
 import json
+import re
 from pathlib import Path
 from typing import Optional, Dict
 from datetime import datetime
@@ -425,9 +426,20 @@ def run_contest_analysis_interactive(trigger_time: str):
                 # 自动生成MD报告
                 try:
                     results_dir = Path(PROJECT_ROOT) / "agents_workspace" / "results"
-                    from .static.report_template import generate_final_report
+                    from .static.report_template import generate_final_report, generate_data_report
+                    
+                    # 生成研究报告
                     markdown_content, report_path = generate_final_report(final_state, results_dir)
-                    display.add_message("报告", f"✅ MD报告已生成: {report_path.name}")
+                    display.add_message("报告", f"✅ 研究报告已生成: {report_path.name}")
+                    
+                    # 生成数据报告
+                    factors_data = load_factors_data(trigger_time)
+                    if factors_data and factors_data.get('agents'):
+                        data_markdown_content, data_report_path = generate_data_report(factors_data, results_dir)
+                        display.add_message("报告", f"✅ 数据报告已生成: {data_report_path.name}")
+                    else:
+                        display.add_message("报告", f"⚠️ 未找到数据源，跳过数据报告生成")
+                    
                     display.update_display(layout, trigger_time)
                 except Exception as e:
                     display.add_message("报告", f"⚠️ MD报告生成失败: {str(e)}")
@@ -637,23 +649,139 @@ async def run_with_events_capture(company, trigger_time: str, display: ContestTr
 def ask_user_for_next_action(final_state):
     """询问用户下一步操作"""
     console.print("\n[green]✅ 分析完成！[/green]")
-    console.print("[dim]输入 'd' 查看详细结果 | 'n' 运行新分析 | 'q' 退出[/dim]")
+    console.print("[dim]输入 'rr' 查看研究报告 | 'dr' 查看数据报告 | 'n' 运行新分析 | 'q' 退出[/dim]")
     
     while True:
         try:
-            user_input = input("请选择操作 (d/n/q): ").strip().lower()
-            if user_input == 'd':
+            user_input = input("请选择操作 (rr/dr/n/q): ").strip().lower()
+            if user_input == 'rr':
                 display_detailed_report(final_state)
-                console.print("[dim]输入 'n' 运行新分析 | 'q' 退出[/dim]")
+                console.print("[dim]输入 'rr' 查看研究报告 | 'dr' 查看数据报告 | 'n' 运行新分析 | 'q' 退出[/dim]")
+            elif user_input == 'dr':
+                display_data_report(final_state)
+                console.print("[dim]输入 'rr' 查看研究报告 | 'dr' 查看数据报告 | 'n' 运行新分析 | 'q' 退出[/dim]")
             elif user_input == 'n':
                 return final_state, "new_analysis"
             elif user_input == 'q':
                 return final_state, "quit"
             else:
-                console.print("[yellow]无效输入，请输入 'd', 'n' 或 'q'[/yellow]")
+                console.print("[yellow]无效输入，请输入 'rr', 'dr', 'n' 或 'q'[/yellow]")
         except KeyboardInterrupt:
             console.print("\n[yellow]用户中断，退出...[/yellow]")
             return final_state, "quit"
+
+def display_data_report(final_state: Dict):
+    """显示数据分析报告"""
+    if not final_state:
+        console.print("[red]无结果可显示[/red]")
+        return
+    
+    try:
+        from .static.report_template import DataReportGenerator
+        
+        # 从final_state获取trigger_time，然后读取factors数据
+        trigger_time = final_state.get('trigger_time', 'N/A')
+        
+        # 读取factors文件夹中的数据
+        factors_data = load_factors_data(trigger_time)
+        
+        if not factors_data or not factors_data.get('agents'):
+            console.print("[yellow]未找到数据分析结果[/yellow]")
+            return
+        
+        generator = DataReportGenerator(factors_data)
+        
+        # 生成报告内容
+        total_agents = len(factors_data.get('agents', {}))
+        
+        markdown_content = f"""# ContestTrade 数据分析报告
+
+## 📊 数据摘要
+
+**分析时间**: {trigger_time}  
+**分析状态**: ✅ 完成  
+**数据代理数量**: {total_agents}  
+
+---
+
+## 🔍 数据源分析详情
+
+"""
+        
+        # 遍历每个代理的数据
+        for agent_name, agent_data in factors_data.get('agents', {}).items():
+            markdown_content += f"### 📈 {agent_name.replace('_', ' ').title()}\n\n"
+            
+            # 只获取context_string字段
+            context_string = agent_data.get('context_string', '')
+            
+            if context_string:
+                # 清洗掉 [Batch X] 标记
+                cleaned_context = re.sub(r'\[Batch \d+\]', '', context_string).strip()
+                markdown_content += f"{cleaned_context}\n\n"
+            else:
+                markdown_content += "**暂无分析内容**\n\n"
+            
+            markdown_content += "---\n\n"
+        
+        generator.display_terminal_interactive_report(markdown_content)
+        
+    except Exception as e:
+        console.print(f"[red]数据报告显示失败: {e}[/red]")
+        console.print("[yellow]正在显示简化版数据报告...[/yellow]")
+        
+        # 显示简化版数据报告
+        try:
+            factors_data = load_factors_data(final_state.get('trigger_time', 'N/A'))
+            if factors_data and factors_data.get('agents'):
+                console.print(f"\n[bold]数据分析摘要:[/bold]")
+                console.print(f"数据代理数量: {len(factors_data.get('agents', {}))}")
+                
+                for agent_name in factors_data.get('agents', {}):
+                    console.print(f"- {agent_name}")
+            else:
+                console.print("[yellow]未找到数据分析结果[/yellow]")
+        except Exception as inner_e:
+            console.print(f"[red]简化版数据报告也显示失败: {inner_e}[/red]")
+
+
+def load_factors_data(trigger_time: str) -> Dict:
+    """加载factors文件夹中的数据"""
+    factors_data = {
+        'trigger_time': trigger_time,
+        'agents': {}
+    }
+    
+    # 格式化时间戳用于文件匹配
+    if trigger_time and trigger_time != 'N/A':
+        timestamp_str = trigger_time.replace("-", "-").replace(":", "-").replace(" ", "_")
+    else:
+        return factors_data
+    
+    # 读取factors目录
+    factors_dir = Path(PROJECT_ROOT) / "agents_workspace" / "factors"
+    if not factors_dir.exists():
+        return factors_data
+    
+    try:
+        for agent_dir in factors_dir.iterdir():
+            if agent_dir.is_dir():
+                agent_name = agent_dir.name
+                
+                # 查找对应时间戳的JSON文件
+                pattern = f"{timestamp_str}*.json"
+                files = list(agent_dir.glob(pattern))
+                
+                if files:
+                    # 读取第一个匹配的文件
+                    with open(files[0], 'r', encoding='utf-8') as f:
+                        agent_data = json.load(f)
+                        factors_data['agents'][agent_name] = agent_data
+    except Exception as e:
+        console.print(f"[yellow]加载factors数据时出错: {e}[/yellow]")
+    
+    return factors_data
+
 
 def display_detailed_report(final_state: Dict):
     """显示详细的可滚动终端报告（使用Rich交互式显示）"""

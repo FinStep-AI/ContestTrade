@@ -14,6 +14,135 @@ from rich.layout import Layout
 from rich.live import Live
 from rich.align import Align
 from rich import box
+import re
+
+class DataReportGenerator:
+    """数据报告生成器"""
+    
+    def __init__(self, factors_data: Dict):
+        self.factors_data = factors_data
+        self.console = Console()
+        
+    def generate_markdown_report(self, save_path: Path) -> str:
+        """生成数据报告的Markdown格式"""
+        
+        # 获取触发时间
+        trigger_time = self.factors_data.get('trigger_time', 'N/A')
+        
+        # 统计数据源数量和代理数量
+        total_agents = len(self.factors_data.get('agents', {}))
+        
+        report_content = f"""# ContestTrade 数据分析报告
+
+## 📊 数据摘要
+
+**分析时间**: {trigger_time}  
+**分析状态**: ✅ 完成  
+**数据代理数量**: {total_agents}  
+
+---
+
+## 🔍 数据源分析详情
+
+"""
+        
+        # 遍历每个代理的数据
+        for agent_name, agent_data in self.factors_data.get('agents', {}).items():
+            report_content += f"### 📈 {agent_name.replace('_', ' ').title()}\n\n"
+            
+            # 只获取context_string字段
+            context_string = agent_data.get('context_string', '')
+            
+            if context_string:
+                # 清洗掉 [Batch X] 标记
+                cleaned_context = re.sub(r'\[Batch \d+\]', '', context_string).strip()
+                report_content += f"{cleaned_context}\n\n"
+            else:
+                report_content += "**暂无分析内容**\n\n"
+            
+            report_content += "---\n\n"
+        
+        # 免责声明
+        report_content += "## ⚠️ 免责声明\n\n"
+        report_content += "本报告由ContestTrade数据分析系统生成，数据来源于各个数据代理的分析结果，仅供参考。\n\n"
+        report_content += f"**报告生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        report_content += f"**系统版本**: ContestTrade v1.1.0\n"
+        
+        # 保存到文件
+        with open(save_path, 'w', encoding='utf-8') as f:
+            f.write(report_content)
+        
+        return report_content
+    
+    def display_terminal_interactive_report(self, markdown_content: str):
+        """显示可滚动的交互式终端数据报告"""
+        
+        # 创建Rich控制台，启用可滚动功能
+        console = Console()
+        
+        # 创建Markdown对象
+        markdown = Markdown(markdown_content)
+        
+        # 创建面板
+        report_panel = Panel(
+            markdown,
+            title="📋 ContestTrade 数据分析报告",
+            title_align="center",
+            border_style="blue",
+            padding=(1, 2),
+        )
+        
+        # 清屏并显示报告
+        console.clear()
+        console.print(report_panel)
+        
+        # 操作提示
+        console.print(f"\n[yellow]📖 报告查看说明:[/yellow]")
+        console.print(f"[dim]• 向上滚动查看报告开头内容[/dim]")
+        console.print(f"[dim]• 向下滚动查看更多详细信息[/dim]") 
+        console.print(f"[dim]• 按任意键返回主菜单[/dim]")
+        
+        try:
+            input()
+        except KeyboardInterrupt:
+            pass
+    
+    def display_interactive_report(self, markdown_content: str, save_path: Path):
+        """显示可滚动的交互式数据报告"""
+        
+        # 创建Rich控制台，启用可滚动功能
+        console = Console()
+        
+        # 创建Markdown对象
+        markdown = Markdown(markdown_content)
+        
+        report_panel = Panel(
+            markdown,
+            title="📋 ContestTrade Data Report",
+            title_align="center",
+            border_style="blue",
+            padding=(1, 2),
+        )
+        
+        # 清屏并显示报告
+        console.clear()
+        console.print(report_panel)
+        
+        # 显示文件保存信息和操作提示
+        console.print(f"\n[green]✅ 数据报告已保存至:[/green]")
+        console.print(f"[blue]📄 {save_path}[/blue]")
+        console.print(f"[dim]您可以使用文本编辑器打开查看完整报告[/dim]")
+        
+        # 操作提示
+        console.print(f"\n[yellow]📖 报告操作说明:[/yellow]")
+        console.print(f"[dim]• 向上滚动查看报告开头[/dim]")
+        console.print(f"[dim]• 向下滚动查看更多内容[/dim]") 
+        console.print(f"[dim]• 按任意键返回主菜单[/dim]")
+        
+        try:
+            input()
+        except KeyboardInterrupt:
+            pass
 
 
 class FinalReportGenerator:
@@ -228,6 +357,39 @@ class FinalReportGenerator:
         
         return table
 
+def generate_data_report(factors_data: Dict, results_dir: Path) -> tuple[str, Path]:
+    """生成数据报告"""
+    
+    # 创建数据报告生成器
+    generator = DataReportGenerator(factors_data)
+    
+    # 生成文件名
+    trigger_time = factors_data.get('trigger_time', 'N/A')
+    
+    if trigger_time != 'N/A' and trigger_time is not None:
+        safe_time = trigger_time.replace(' ', '_').replace(':', '-')
+    else:
+        safe_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    
+    filename = f"data_report_{safe_time}.md"
+    data_reports_dir = results_dir / "data_reports"
+    data_reports_dir.mkdir(parents=True, exist_ok=True)
+    save_path = data_reports_dir / filename
+    
+    markdown_content = generator.generate_markdown_report(save_path)
+    
+    return markdown_content, save_path
+
+
+def display_data_report_interactive(factors_data: Dict, results_dir: Path):
+    """显示交互式数据报告"""
+    
+    markdown_content, save_path = generate_data_report(factors_data, results_dir)
+    generator = DataReportGenerator(factors_data)
+    generator.display_interactive_report(markdown_content, save_path)
+    
+    return save_path
+
 
 def generate_final_report(final_state: Dict, results_dir: Path) -> tuple[str, Path]:
     """生成最终报告"""
@@ -242,8 +404,9 @@ def generate_final_report(final_state: Dict, results_dir: Path) -> tuple[str, Pa
         safe_time = trigger_time.replace(' ', '_').replace(':', '-')
     
     filename = f"final_report_{safe_time}.md"
-    save_path = results_dir / filename
-    results_dir.mkdir(parents=True, exist_ok=True)
+    research_reports_dir = results_dir / "research_reports"
+    research_reports_dir.mkdir(parents=True, exist_ok=True)
+    save_path = research_reports_dir / filename
     markdown_content = generator.generate_markdown_report(save_path)
     
     return markdown_content, save_path
