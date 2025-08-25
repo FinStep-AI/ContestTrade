@@ -53,6 +53,12 @@ conda activate contesttrade
 
 # 3. 安装项目依赖
 pip install -r requirements.txt
+
+```
+或克隆后修改配置，通过 [Docker](https://docs.n8n.io/hosting/installation/docker/)启动:
+
+```
+docker run -it --rm --name contest_trade -v $(pwd)/config.yaml:/ContestTrade/config.yaml tiandongdong/contest_trade:v1.0.2
 ```
 
 ## Configuration (配置)

@@ -1,0 +1,6 @@
+**/*.md
+.git
+.github
+.vscode
+config.yaml
+Dockerfile

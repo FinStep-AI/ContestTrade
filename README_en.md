@@ -55,6 +55,12 @@ conda activate contesttrade
 pip install -r requirements.txt
 ```
 
+Or deploy with [Docker](https://docs.n8n.io/hosting/installation/docker/):
+
+```
+docker run -it --rm --name contest_trade -v $(pwd)/config.yaml:/ContestTrade/config.yaml tiandongdong/contest_trade:v1.0.2
+```
+
 ## Configuration
 
 Before running ContestTrade, you need to configure the necessary API keys and LLM parameters.
