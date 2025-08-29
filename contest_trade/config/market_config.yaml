@@ -1,0 +1,89 @@
+
+target_markets: 
+  - "US-Stock"
+
+custom_symbols: 
+  US-Stock: []
+  
+
+# 交易成本配置
+trading_costs:
+  CSI300:
+    type: "a_stock"
+    commission_rate: 0.0003        # 佣金费率 万3
+    commission_min: 5.0            # 最低佣金 5元
+    stamp_tax_rate: 0.001          # 印花税 千1 (仅卖出)
+    transfer_fee_rate: 0.00002     # 过户费 万0.2
+    slippage_rate: 0.001           # 滑点率 0.1%
+    slippage_mode: "percentage"    # 滑点模式: percentage/fixed
+    slippage_fixed: 0.01           # 固定滑点金额（当mode为fixed时）
+    min_shares: 100                # 最小交易单位 100股
+
+  CSI500:
+    type: "a_stock"
+    commission_rate: 0.0003        # 佣金费率 万3
+    commission_min: 5.0            # 最低佣金 5元
+    stamp_tax_rate: 0.001          # 印花税 千1 (仅卖出)
+    transfer_fee_rate: 0.00002     # 过户费 万0.2
+    slippage_rate: 0.001           # 滑点率 0.1%
+    slippage_mode: "percentage"    # 滑点模式: percentage/fixed
+    slippage_fixed: 0.01           # 固定滑点金额（当mode为fixed时）
+    min_shares: 100                # 最小交易单位 100股
+
+  CSI1000:
+    type: "a_stock"
+    commission_rate: 0.0003        # 佣金费率 万3
+    commission_min: 5.0            # 最低佣金 5元
+    stamp_tax_rate: 0.001          # 印花税 千1 (仅卖出)
+    transfer_fee_rate: 0.00002     # 过户费 万0.2
+    slippage_rate: 0.001           # 滑点率 0.1%
+    slippage_mode: "percentage"    # 滑点模式: percentage/fixed
+    slippage_fixed: 0.01           # 固定滑点金额（当mode为fixed时）
+    min_shares: 100                # 最小交易单位 100股
+
+  # A股交易成本配置
+  CN-Stock:
+    type: "a_stock"
+    commission_rate: 0.0003        # 佣金费率 万3
+    commission_min: 5.0            # 最低佣金 5元
+    stamp_tax_rate: 0.001          # 印花税 千1 (仅卖出)
+    transfer_fee_rate: 0.00002     # 过户费 万0.2
+    slippage_rate: 0.001           # 滑点率 0.1%
+    slippage_mode: "percentage"    # 滑点模式: percentage/fixed
+    slippage_fixed: 0.01           # 固定滑点金额（当mode为fixed时）
+    min_shares: 100                # 最小交易单位 100股
+  
+  # A股ETF交易成本配置
+  CN-ETF:
+    type: "a_stock"
+    commission_rate: 0.0003        # 佣金费率 万3
+    commission_min: 5.0            # 最低佣金 5元
+    stamp_tax_rate: 0.0            # ETF无印花税
+    transfer_fee_rate: 0.00002     # 过户费 万0.2
+    slippage_rate: 0.001           # 滑点率 0.1%
+    slippage_mode: "percentage"    # 滑点模式
+    slippage_fixed: 0.01           # 固定滑点金额
+    min_shares: 100                # 最小交易单位 100股
+  
+  # 美股交易成本配置（可选）
+  US-Stock:
+    type: "us_stock"
+    fee_type: "zero_commission"    # 费用类型: zero_commission/per_trade/per_share
+    commission_per_trade: 0.0      # 每笔交易费用
+    commission_per_share: 0.0      # 每股费用
+    slippage_rate: 0.001           # 滑点率 0.1%
+    slippage_mode: "percentage"    # 滑点模式: percentage/fixed
+    slippage_fixed: 0.01           # 固定滑点金额 ($0.01)
+    min_shares: 1                  # 最小交易单位 1股
+  
+  # 港股交易成本配置（可选）
+  HK-Stock:
+    type: "hk_stock"
+    commission_rate: 0.0025        # 佣金费率 0.25%
+    commission_min: 100.0          # 最低佣金 100港币
+    stamp_duty_rate: 0.0013        # 印花税 0.13%
+    trading_fee_rate: 0.00005      # 交易费 0.005%
+    slippage_rate: 0.002           # 滑点率 0.2%
+    slippage_mode: "percentage"    # 滑点模式
+    slippage_fixed: 0.02           # 固定滑点金额 (0.02港币)
+    min_shares: 100                # 最小交易单位 100股

@@ -1,0 +1,62 @@
+tushare_key: "" #YOUR_TUSHARE_KEY
+bocha_key: "" #YOUR_BOCHA_KEY
+serp_key: "" #YOUR_SERP_KEY
+
+
+polygon_key: "NrTBTbgxidu0QgGzvXRLeRQUbSiBdhSX" #YOUR_POLYGON_KEY, apply on https://polygon.io/
+seekingalpha_key: "29c556291dmsh3f95015ca3f50cfp161291jsnc759192efcc4" #YOUR_SEEKINGALPHA_KEY, apply on https://rapidapi.com/apidojo/api/seeking-alpha
+
+
+fmp_key: "CydfXljMscLOIcop9UtBy3eyEGHlFyPB" #YOUR_FMP_KEY
+finnhub_key: "" #YOUR_FINNHUB_KEY
+
+llm:
+  base_url: ""
+  api_key: "" #YOUR_DEEPSEEK_API_KEY
+  model_name: ""
+
+llm_thinking:
+  base_url: ""
+  api_key: "" #YOUR_DEEPSEEK_API_KEY
+  model_name: ""
+
+vlm:
+  base_url: ""
+  api_key: "" #YOUR_STEPFUN_API_KEY
+  model_name: ""
+
+data_agents_config:
+  - agent_name: "thx_summary_agent"
+    data_source_list: 
+      - "data_source.thx_news.ThxNews"
+  - agent_name: "sina_summary_agent"
+    data_source_list: 
+      - "data_source.sina_news.SinaNews"
+  - agent_name: "price_market_agent"
+    data_source_list: 
+      - "data_source.price_market.PriceMarket"
+  - agent_name: "hot_money_agent"
+    data_source_list: 
+      - "data_source.hot_money.HotMoney"
+
+research_agent_config:
+  belief_list_path: "config/belief_list.json"
+  max_react_step: 10
+  output_language: "中文"
+  tools:
+    - "tools.stock_symbol_search_us.stock_symbol_search"
+    - "tools.stock_selector_us.stock_selector"
+    - "tools.corp_info_us.company_financial_info"
+    - "tools.price_info_us.price_info"
+    - "tools.search_web.search_web"
+    - "tools.stock_summary_us.stock_summary"
+    - "tools.final_report.final_report"
+
+system_language: "中文"
+
+researcher_contest_config:
+  contest_mode: False
+  judger_config: llm
+  num_judgers: 3
+  window_m: 3
+  window_n: 3
