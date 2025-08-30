@@ -17,7 +17,7 @@ import asyncio
 import traceback
 from datetime import datetime, timedelta
 from data_source.data_source_base import DataSourceBase
-from utils.yahoo_utils import get_yahoo_stock_price
+from utils.fmp_utils import get_us_stock_price
 from models.llm_model import GLOBAL_LLM
 from loguru import logger
 from config.config import cfg
@@ -52,8 +52,8 @@ class USPriceMarket(DataSourceBase):
                 end_date = datetime.strptime(trade_date_str, "%Y%m%d")
                 start_date = end_date - timedelta(days=7)
                 
-                df = get_yahoo_stock_price(etf, start_date.strftime("%Y-%m-%d"), 
-                                          end_date.strftime("%Y-%m-%d"), verbose=False)
+                df = get_us_stock_price(etf, from_date=start_date.strftime("%Y-%m-%d"), 
+                                       to_date=end_date.strftime("%Y-%m-%d"), verbose=False)
                 
                 if df is not None and not df.empty and len(df) >= 2:
                     latest = df.iloc[-1]
@@ -87,8 +87,8 @@ class USPriceMarket(DataSourceBase):
                     end_date = datetime.strptime(trade_date_str, "%Y%m%d")
                     start_date = end_date - timedelta(days=7)
                     
-                    df = get_yahoo_stock_price(symbol, start_date.strftime("%Y-%m-%d"), 
-                                              end_date.strftime("%Y-%m-%d"), verbose=False)
+                    df = get_us_stock_price(symbol, from_date=start_date.strftime("%Y-%m-%d"), 
+                                           to_date=end_date.strftime("%Y-%m-%d"), verbose=False)
                     
                     if df is not None and not df.empty and len(df) >= 2:
                         latest = df.iloc[-1]
@@ -136,7 +136,7 @@ class USPriceMarket(DataSourceBase):
             
             analysis_content += "\n【资金流向分析】\n"
             
-            # 分析成交量
+            # 分析成交量 TODO：FMP没有volume_ratio，后面需要补充
             high_volume_sectors = [name for name, data in sector_data.items() if data['volume_ratio'] > 1.2]
             if high_volume_sectors:
                 analysis_content += f"成交量活跃板块: {', '.join(high_volume_sectors)}\n"
@@ -200,8 +200,44 @@ class USPriceMarket(DataSourceBase):
             
             df = pd.DataFrame(data)
             
-            # 缓存结果
-            self.save_data_cached(trigger_time, df)
+            # 检查LLM摘要中是否包含具体数据
+            llm_summary = llm_summary_dict["llm_summary"]
+            has_market_data = False
+            has_sector_data = False
+            
+            # 检查【主要指数表现】部分是否有具体数据
+            if "【主要指数表现】" in llm_summary:
+                market_section_start = llm_summary.find("【主要指数表现】")
+                market_section_end = llm_summary.find("【行业板块表现】")
+                if market_section_end == -1:
+                    market_section_end = llm_summary.find("【资金流向分析】")
+                if market_section_end == -1:
+                    market_section_end = len(llm_summary)
+                
+                market_section = llm_summary[market_section_start:market_section_end]
+                # 检查是否包含具体的指数数据（包含数字和百分号）
+                if any(char.isdigit() for char in market_section) and "%" in market_section:
+                    has_market_data = True
+            
+            # 检查【行业板块表现】部分是否有具体数据
+            if "【行业板块表现】" in llm_summary:
+                sector_section_start = llm_summary.find("【行业板块表现】")
+                sector_section_end = llm_summary.find("【资金流向分析】")
+                if sector_section_end == -1:
+                    sector_section_end = len(llm_summary)
+                
+                sector_section = llm_summary[sector_section_start:sector_section_end]
+                # 检查是否包含具体的板块数据（包含数字和百分号）
+                if any(char.isdigit() for char in sector_section) and "%" in sector_section:
+                    has_sector_data = True
+            
+            # 只有当两个部分都有具体数据时才缓存
+            if has_market_data and has_sector_data:
+                logger.info(f"数据完整，缓存 {trade_date} 的美股价格市场数据")
+                self.save_data_cached(trigger_time, df)
+            else:
+                logger.warning(f"数据不完整，跳过缓存 {trade_date} 的美股价格市场数据 (市场数据: {has_market_data}, 板块数据: {has_sector_data})")
+            
             return df
                 
         except Exception as e:

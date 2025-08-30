@@ -7,6 +7,7 @@ FMP (Financial Modeling Prep) 的工具函数
 """
 import os
 import json
+import sys
 import pandas as pd
 import requests
 from pathlib import Path
@@ -16,9 +17,13 @@ import hashlib
 import pickle
 import time
 from typing import List
-from config.config import cfg
 
 DEFAULT_FMP_CACHE_DIR = Path(__file__).parent / "fmp_cache"
+_CURRENT_FILE = Path(__file__).resolve()
+_CONTEST_TRADE_DIR = _CURRENT_FILE.parents[1]
+if str(_CONTEST_TRADE_DIR) not in sys.path:
+    sys.path.insert(0, str(_CONTEST_TRADE_DIR))
+from config.config import cfg
 
 class CachedFMPClient:
     def __init__(self, cache_dir=None, api_key=None):
@@ -447,4 +452,7 @@ def format_price_data(price_data):
     return result_df
 
 if __name__ == "__main__":
-    pass
+    print("测试股价获取...")
+    df = get_us_stock_price('XLK', '2024-08-14', '2024-08-15', verbose=True)
+    if df is not None:
+        print(df.head())
