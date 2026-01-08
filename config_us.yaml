@@ -20,16 +20,19 @@ alpha_vantage_key: ""
 polygon_key: ""
 
 llm:
+  provider: "openai"
   base_url: "https://api.deepseek.com"
   api_key: "" #YOUR_DEEPSEEK_API_KEY
   model_name: "deepseek-chat"
 
 llm_thinking:
+  provider: "openai"
   base_url: "https://api.deepseek.com"
   api_key: "" #YOUR_DEEPSEEK_API_KEY
   model_name: "deepseek-reasoner"
 
 vlm:
+  provider: "openai"
   base_url: "https://api.stepfun.com/v1"
   api_key: "" #YOUR_STEPFUN_API_KEY
   model_name: "step-1o-turbo-vision"

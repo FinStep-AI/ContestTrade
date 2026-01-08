@@ -1,19 +1,19 @@
 """
-OpenAI Model Implementation
+Multi-Provider LLM Model Implementation
 
-This module provides an implementation of the BaseAgentModel for OpenAI models.
+This module provides an implementation of the BaseAgentModel that supports
+multiple LLM providers: OpenAI, Gemini, and Ollama.
 It follows an async-first approach, where the primary implementation is the
 asynchronous streaming method (a_stream_run).
 """
 import os
 import sys
 import httpx
-import openai
 import asyncio
+from abc import ABC, abstractmethod
 from pathlib import Path
-from openai import OpenAI, AsyncOpenAI
-from openai.types.chat import ChatCompletionChunk
-from typing import Dict, List, Optional, AsyncIterator, Callable
+from typing import Dict, List, Optional, AsyncIterator, Callable, Any
+from enum import Enum
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
@@ -26,9 +26,18 @@ from models.base_agent_model import (
     ModelResponse
 )
 
+
+class ProviderType(Enum):
+    """Enumeration of supported LLM providers."""
+    OPENAI = "openai"
+    GEMINI = "gemini"
+    OLLAMA = "ollama"
+
 class LLMModelConfig:
-    def __init__(self, model_name: str, api_key: str, base_url: str,
-                 max_retries: int = 3, retry_delay: float = 20.0, timeout: float = 60.0, extra_headers: dict = None, proxys: dict = None):
+    def __init__(self, provider: str, model_name: str, api_key: str = None, base_url: str = None,
+                 max_retries: int = 3, retry_delay: float = 20.0, timeout: float = 60.0, 
+                 extra_headers: dict = None, proxys: dict = None, **kwargs):
+        self.provider = provider
         self.model_name = model_name
         self.api_key = api_key
         self.base_url = base_url
@@ -37,74 +46,138 @@ class LLMModelConfig:
         self.timeout = timeout
         self.extra_headers = extra_headers
         self.proxys = proxys
+        # Store additional provider-specific configuration
+        self.extra_config = kwargs
 
 
-class LLMModel(BaseAgentModel):
-    """
-    OpenAI model implementation.
+class BaseProvider(ABC):
+    """Abstract base class for LLM providers."""
     
-    This class provides a concrete implementation of the BaseAgentModel.
-    Following the async-first approach, it only implements the a_stream_run method,
-    while all other methods (run, a_run, stream_run) are handled by the base class.
-    """
-    
-    def __init__(
-        self,
-        config: LLMModelConfig,
-        **kwargs
-    ):
-        """
-        Initialize the OpenAI model.
-        
-        Args:
-            model_name: The name of the OpenAI model to use
-            api_key: OpenAI API key (optional)
-            base_url: Base URL for API requests (optional)
-            **kwargs: Additional configuration parameters
-        """
-        super().__init__(config, **kwargs)
-        
+    def __init__(self, config: LLMModelConfig):
         self.config = config
         self.model_name = config.model_name
         self.api_key = config.api_key
         self.base_url = config.base_url
         self.extra_headers = config.extra_headers
         self.proxys = config.proxys
+    
+    @abstractmethod
+    async def create_stream(self, messages: List[Dict[str, str]], temperature: float, 
+                           max_tokens: Optional[int], **kwargs) -> Any:
+        """Create a streaming response from the provider."""
+        pass
+    
+    @abstractmethod
+    def process_chunk(self, chunk: Any) -> StreamingChunk[str]:
+        """Process a streaming chunk from the provider."""
+        pass
+    
+    def preprocess_messages(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """Preprocess messages for the provider. Can be overridden by subclasses."""
+        return messages
+
+
+class OpenAIProvider(BaseProvider):
+    """OpenAI provider implementation."""
+    
+    def __init__(self, config: LLMModelConfig):
+        super().__init__(config)
+        
+        # Import OpenAI modules
+        try:
+            import openai
+            from openai import OpenAI, AsyncOpenAI
+            from openai.types.chat import ChatCompletionChunk
+            self._openai = openai
+            self._ChatCompletionChunk = ChatCompletionChunk
+        except ImportError:
+            raise ImportError("openai package is required for OpenAI provider. Install with: pip install openai")
+        
+        # Set default values from environment if not provided
         if self.api_key is None:
             self.api_key = os.environ.get("OPENAI_API_KEY")
         if self.base_url is None:
             self.base_url = os.environ.get("OPENAI_BASE_URL")
-
-        # Initialize synchronous client
-        self.client = OpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url,
-            http_client=httpx.Client(proxy=self.proxys) if self.proxys else None
-        )
         
-        # Initialize asynchronous client
-        self.async_client = AsyncOpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url,
-            http_client=httpx.AsyncClient(proxy=self.proxys) if self.proxys else None
-        )
-
-        if self.extra_headers is not None:
-            self.client = self.client.with_options(
-                default_headers=self.extra_headers)
-            self.async_client = self.async_client.with_options(
-                default_headers=self.extra_headers)
+        # Initialize clients (lazy initialization if no API key)
+        if self.api_key:
+            self.client = OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                http_client=httpx.Client(proxy=self.proxys) if self.proxys else None
+            )
+            
+            self.async_client = AsyncOpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                http_client=httpx.AsyncClient(proxy=self.proxys) if self.proxys else None
+            )
+            
+            if self.extra_headers is not None:
+                self.client = self.client.with_options(default_headers=self.extra_headers)
+                self.async_client = self.async_client.with_options(default_headers=self.extra_headers)
+        else:
+            # Defer client initialization until first use
+            self.client = None
+            self.async_client = None
     
-    def _process_chunk(self, chunk: ChatCompletionChunk) -> StreamingChunk[str]:
+    def _ensure_clients(self):
+        """Ensure OpenAI clients are initialized."""
+        if self.async_client is None:
+            if not self.api_key:
+                raise ValueError("OpenAI API key is required but not provided. Set it in config or OPENAI_API_KEY environment variable.")
+            
+            self.client = OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                http_client=httpx.Client(proxy=self.proxys) if self.proxys else None
+            )
+            
+            self.async_client = AsyncOpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                http_client=httpx.AsyncClient(proxy=self.proxys) if self.proxys else None
+            )
+            
+            if self.extra_headers is not None:
+                self.client = self.client.with_options(default_headers=self.extra_headers)
+                self.async_client = self.async_client.with_options(default_headers=self.extra_headers)
+    
+    async def create_stream(self, messages: List[Dict[str, str]], temperature: float, 
+                           max_tokens: Optional[int], **kwargs) -> Any:
+        self._ensure_clients()  # Ensure clients are initialized
+        processed_messages = self.preprocess_messages(messages)
+        
+        params = {
+            "model": self.model_name,
+            "messages": processed_messages,
+            "temperature": temperature,
+            "stream": True,
+            **kwargs
+        }
+        
+        if max_tokens is not None:
+            params["max_tokens"] = max_tokens
+        
+        # Handle thinking mode for compatible models
+        if 'thinking' in params:
+            thinking_flag = params.pop('thinking')
+            if thinking_flag:
+                params['extra_body'] = {"thinking": {"type": "enabled"}}
+            else:
+                params['extra_body'] = {"thinking": {"type": "disabled"}}
+        
+        return await self.async_client.chat.completions.create(**params)
+    
+    def process_chunk(self, chunk) -> StreamingChunk[str]:
         """Process a streaming chunk from OpenAI."""
-        # Extract content from the chunk
-        #print(chunk.choices)
         if hasattr(chunk.choices[0].delta, 'reasoning_content') and chunk.choices[0].delta.reasoning_content:
             content = chunk.choices[0].delta.reasoning_content
             is_reasoning = True
         else:
             content = chunk.choices[0].delta.content or ""
             is_reasoning = False
+        
         is_finished = len(chunk.choices) > 0 and chunk.choices[0].finish_reason is not None
         
         return StreamingChunk(
@@ -113,6 +186,224 @@ class LLMModel(BaseAgentModel):
             raw_chunk=chunk,
             is_reasoning=is_reasoning
         )
+
+
+class GeminiProvider(BaseProvider):
+    """Google Gemini provider implementation."""
+    
+    def __init__(self, config: LLMModelConfig):
+        super().__init__(config)
+        
+        try:
+            import google.generativeai as genai
+            self.genai = genai
+        except ImportError:
+            raise ImportError("google-generativeai package is required for Gemini provider. Install with: pip install google-generativeai")
+        
+        # Set API key
+        if self.api_key is None:
+            self.api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        
+        if self.api_key:
+            genai.configure(api_key=self.api_key)
+        
+        # Configure model
+        generation_config = {
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "top_k": 64,
+            "max_output_tokens": 8192,
+        }
+        
+        self.model = genai.GenerativeModel(
+            model_name=self.model_name,
+            generation_config=generation_config
+        )
+    
+    def preprocess_messages(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """Convert OpenAI format messages to Gemini format."""
+        gemini_messages = []
+        
+        for msg in messages:
+            role = msg["role"]
+            content = msg["content"]
+            
+            # Map OpenAI roles to Gemini roles
+            if role == "system":
+                # Gemini doesn't have system role, prepend to first user message
+                if gemini_messages and gemini_messages[-1].get("role") == "user":
+                    gemini_messages[-1]["parts"] = [f"{content}\n\n{gemini_messages[-1]['parts'][0]}"]
+                else:
+                    gemini_messages.append({"role": "user", "parts": [content]})
+            elif role == "user":
+                gemini_messages.append({"role": "user", "parts": [content]})
+            elif role == "assistant":
+                gemini_messages.append({"role": "model", "parts": [content]})
+        
+        return gemini_messages
+    
+    async def create_stream(self, messages: List[Dict[str, str]], temperature: float, 
+                           max_tokens: Optional[int], **kwargs) -> Any:
+        processed_messages = self.preprocess_messages(messages)
+        
+        # Update generation config
+        generation_config = self.model._generation_config.copy()
+        generation_config["temperature"] = temperature
+        if max_tokens:
+            generation_config["max_output_tokens"] = max_tokens
+        
+        # Create chat session
+        chat = self.model.start_chat(history=processed_messages[:-1] if len(processed_messages) > 1 else [])
+        
+        # Get the last message content
+        last_message = processed_messages[-1]["parts"][0] if processed_messages else ""
+        
+        # Generate streaming response
+        response = await chat.send_message_async(last_message, stream=True)
+        return response
+    
+    def process_chunk(self, chunk) -> StreamingChunk[str]:
+        """Process a streaming chunk from Gemini."""
+        content = ""
+        is_finished = False
+        
+        if hasattr(chunk, 'text'):
+            content = chunk.text
+        
+        # Gemini doesn't provide explicit finish signals in chunks
+        # We'll rely on the async iterator to determine when finished
+        
+        return StreamingChunk(
+            content=content,
+            is_finished=is_finished,
+            raw_chunk=chunk,
+            is_reasoning=False
+        )
+
+
+class OllamaProvider(BaseProvider):
+    """Ollama provider implementation."""
+    
+    def __init__(self, config: LLMModelConfig):
+        super().__init__(config)
+        
+        # Set default base URL for Ollama
+        if self.base_url is None:
+            self.base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+        
+        # Ollama doesn't typically require API keys, but support it if provided
+        if self.api_key is None:
+            self.api_key = os.environ.get("OLLAMA_API_KEY")
+    
+    async def create_stream(self, messages: List[Dict[str, str]], temperature: float, 
+                           max_tokens: Optional[int], **kwargs) -> Any:
+        processed_messages = self.preprocess_messages(messages)
+        
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        if self.extra_headers:
+            headers.update(self.extra_headers)
+        
+        payload = {
+            "model": self.model_name,
+            "messages": processed_messages,
+            "stream": True,
+            "options": {
+                "temperature": temperature,
+            }
+        }
+        
+        if max_tokens:
+            payload["options"]["num_predict"] = max_tokens
+        
+        # Add any extra options from config
+        if self.config.extra_config:
+            payload["options"].update(self.config.extra_config)
+        
+        # Make HTTP request to Ollama API
+        async with httpx.AsyncClient(proxy=self.proxys) as client:
+            response = await client.post(
+                f"{self.base_url}/api/chat",
+                json=payload,
+                headers=headers,
+                timeout=self.config.timeout
+            )
+            response.raise_for_status()
+            return response.aiter_lines()
+    
+    def process_chunk(self, chunk_line: str) -> StreamingChunk[str]:
+        """Process a streaming chunk from Ollama."""
+        import json
+        
+        try:
+            chunk_data = json.loads(chunk_line)
+            content = chunk_data.get("message", {}).get("content", "")
+            is_finished = chunk_data.get("done", False)
+            
+            return StreamingChunk(
+                content=content,
+                is_finished=is_finished,
+                raw_chunk=chunk_data,
+                is_reasoning=False
+            )
+        except json.JSONDecodeError:
+            # Skip malformed JSON lines
+            return StreamingChunk(
+                content="",
+                is_finished=False,
+                raw_chunk=chunk_line,
+                is_reasoning=False
+            )
+
+
+def create_provider(config: LLMModelConfig) -> BaseProvider:
+    """Factory function to create the appropriate provider based on config."""
+    provider_type = config.provider.lower()
+    
+    if provider_type == ProviderType.OPENAI.value:
+        return OpenAIProvider(config)
+    elif provider_type == ProviderType.GEMINI.value:
+        return GeminiProvider(config)
+    elif provider_type == ProviderType.OLLAMA.value:
+        return OllamaProvider(config)
+    else:
+        raise ValueError(f"Unsupported provider: {provider_type}. Supported providers: {[p.value for p in ProviderType]}")
+
+
+class LLMModel(BaseAgentModel):
+    """
+    Multi-provider LLM model implementation.
+    
+    This class provides a concrete implementation of the BaseAgentModel that supports
+    multiple LLM providers (OpenAI, Gemini, Ollama).
+    Following the async-first approach, it delegates to the appropriate provider
+    for the actual implementation.
+    """
+    
+    def __init__(
+        self,
+        config: LLMModelConfig,
+        **kwargs
+    ):
+        """
+        Initialize the LLM model with the specified provider.
+        
+        Args:
+            config: LLMModelConfig instance specifying provider and configuration
+            **kwargs: Additional configuration parameters
+        """
+        super().__init__(config.model_name, **kwargs)
+        
+        self.config = config
+        self.model_name = config.model_name
+        
+        # Create the appropriate provider
+        self.provider = create_provider(config)
+    
+    def preprocess_messages(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """Preprocess messages using the provider's preprocessing."""
+        return self.provider.preprocess_messages(messages)
 
     async def a_run_with_semaphore(
         self,
@@ -280,12 +571,24 @@ class LLMModel(BaseAgentModel):
                 )
             except (
                 asyncio.TimeoutError,
-                openai.APITimeoutError,
-                openai.APIConnectionError,
                 ConnectionError,
                 TimeoutError
             ) as e:
-                if attempt < max_retries:
+                # Handle provider-specific exceptions
+                should_retry = False
+                if self.config.provider == ProviderType.OPENAI.value:
+                    try:
+                        import openai
+                        if isinstance(e, (openai.APITimeoutError, openai.APIConnectionError)):
+                            should_retry = True
+                    except ImportError:
+                        pass
+                
+                # Always retry on these common exceptions
+                if isinstance(e, (asyncio.TimeoutError, ConnectionError, TimeoutError)):
+                    should_retry = True
+                
+                if should_retry and attempt < max_retries:
                     print(f"🔄 LLM API调用失败 (尝试 {attempt + 1}/{max_retries + 1}): {type(e).__name__}: {e}")
                     print(f"⏳ 等待 {retry_delay} 秒后重试...")
                     await asyncio.sleep(retry_delay)
@@ -314,66 +617,91 @@ class LLMModel(BaseAgentModel):
         Returns:
             An AsyncResponseStream that yields chunks of the generated content
         """
-        processed_messages = self.preprocess_messages(messages)
+        # Get the stream from the provider
+        stream = await self.provider.create_stream(messages, temperature, max_tokens, **kwargs)
         
-        # Prepare parameters
-        params = {
-            "model": self.model_name,
-            "messages": processed_messages,
-            "temperature": temperature,
-            "stream": True,
-            **kwargs
-        }
-        
-        if max_tokens is not None:
-            params["max_tokens"] = max_tokens
-        
-        # Make API call
-        if 'thinking' in params:
-            thinking_flag = params.pop('thinking')
-            if thinking_flag:
-                params['extra_body'] = {"thinking": {"type": "enabled"}}
-            else:
-                params['extra_body'] = {"thinking": {"type": "disabled"}}
-
-        stream = await self.async_client.chat.completions.create(**params)
-        
-        # Create async iterator that processes chunks
+        # Create async iterator that processes chunks using provider's chunk processor
         async def chunk_iterator() -> AsyncIterator[StreamingChunk[str]]:
-            async for chunk in stream:
-                if not chunk.choices:
-                    continue
-                yield self._process_chunk(chunk)
+            if self.config.provider == ProviderType.OLLAMA.value:
+                # Handle Ollama's line-by-line streaming
+                async for line in stream:
+                    if line.strip():
+                        chunk = self.provider.process_chunk(line)
+                        if chunk.content or chunk.is_finished:
+                            yield chunk
+            elif self.config.provider == ProviderType.GEMINI.value:
+                # Handle Gemini streaming
+                async for chunk in stream:
+                    processed_chunk = self.provider.process_chunk(chunk)
+                    if processed_chunk.content:
+                        yield processed_chunk
+            else:
+                # Handle OpenAI and OpenAI-compatible streaming
+                async for chunk in stream:
+                    if hasattr(chunk, 'choices') and not chunk.choices:
+                        continue
+                    yield self.provider.process_chunk(chunk)
         
         return AsyncResponseStream(
             iterator=chunk_iterator(),
             model_name=self.model_name
         )
 
+# Helper function to determine provider from model name or base URL
+def detect_provider(model_name: str, base_url: str = None) -> str:
+    """Auto-detect provider based on model name or base URL."""
+    model_name = model_name.lower()
+    
+    # Check for Gemini models
+    if "gemini" in model_name or "google" in model_name:
+        return ProviderType.GEMINI.value
+    
+    # Check for Ollama (usually local models or specific patterns)
+    if base_url and ("localhost" in base_url or "127.0.0.1" in base_url or ":11434" in base_url):
+        return ProviderType.OLLAMA.value
+    
+    # Check for common Ollama model names
+    ollama_models = ["llama", "mistral", "codellama", "vicuna", "alpaca", "orca", "phi", "neural-chat"]
+    if any(ollama_model in model_name for ollama_model in ollama_models):
+        return ProviderType.OLLAMA.value
+    
+    # Default to OpenAI (includes OpenAI-compatible APIs)
+    return ProviderType.OPENAI.value
+
+
+# Create global configurations with auto-detected providers
+llm_provider = cfg.llm.get("provider", detect_provider(cfg.llm["model_name"], cfg.llm.get("base_url")))
 GLOBAL_LLM_CONFIG = LLMModelConfig(
+    provider=llm_provider,
     model_name=cfg.llm["model_name"],
-    api_key=cfg.llm["api_key"],
-    base_url=cfg.llm["base_url"]
+    api_key=cfg.llm.get("api_key"),
+    base_url=cfg.llm.get("base_url")
 )
 GLOBAL_LLM = LLMModel(GLOBAL_LLM_CONFIG)
 
 try:
+    thinking_provider = cfg.llm_thinking.get("provider", detect_provider(cfg.llm_thinking["model_name"], cfg.llm_thinking.get("base_url")))
     GLOBAL_THINKING_LLM_CONFIG = LLMModelConfig(
+        provider=thinking_provider,
         model_name=cfg.llm_thinking["model_name"],
-        api_key=cfg.llm_thinking["api_key"],
-        base_url=cfg.llm_thinking["base_url"]
+        api_key=cfg.llm_thinking.get("api_key"),
+        base_url=cfg.llm_thinking.get("base_url")
     )
+    assert GLOBAL_THINKING_LLM_CONFIG.api_key is not None
     GLOBAL_THINKING_LLM = LLMModel(GLOBAL_THINKING_LLM_CONFIG)
 except Exception as e:
     print(f"加载thinking模型失败，使用llm模型替代: {e}")
     GLOBAL_THINKING_LLM = GLOBAL_LLM
 
 try:
+    vlm_provider = cfg.vlm.get("provider", detect_provider(cfg.vlm["model_name"], cfg.vlm.get("base_url")))
     GLOBAL_VLM_CONFIG = LLMModelConfig(
+        provider=vlm_provider,
         model_name=cfg.vlm["model_name"],
-        api_key=cfg.vlm["api_key"],
-        base_url=cfg.vlm["base_url"]
+        api_key=cfg.vlm.get("api_key"),
+        base_url=cfg.vlm.get("base_url")
     )
+    assert GLOBAL_VLM_CONFIG.api_key is not None
     GLOBAL_VISION_LLM = LLMModel(GLOBAL_VLM_CONFIG)
 except Exception as e:
     print(f"加载vlm模型失败，vision能力不可用: {e}")

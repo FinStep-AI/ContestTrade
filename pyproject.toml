@@ -19,5 +19,7 @@ dependencies = [
     "pandas",
     "langgraph",
     "rich",
-    "tabulate"
+    "tabulate",
+    "akshare>=1.17.49",
+    "crawl4ai>=0.7.4",
 ]

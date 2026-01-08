@@ -13,25 +13,67 @@ fmp_key: ""
 #YOUR_FINNHUB_KEY
 finnhub_key: "" 
 
+# ==================================================
+# LLM 配置说明 / LLM Configuration
+# ==================================================
+# 支持的 provider 选项 / Supported provider options:
+#   - "openai"  : OpenAI官方API或兼容接口
+#   - "gemini"  : Google Gemini API
+#   - "ollama"  : 本地Ollama服务
+#
+# 配置示例 / Configuration examples:
+#
+# OpenAI:
+#   provider: "openai"
+#   base_url: "https://api.openai.com/v1"
+#   api_key: "your_openai_api_key"
+#   model_name: "gpt-4"
+#
+# DeepSeek (OpenAI compatible):
+#   provider: "openai"
+#   base_url: "https://api.deepseek.com"
+#   api_key: "your_deepseek_api_key"
+#   model_name: "deepseek-chat"
+#
+# 阶跃星辰 (OpenAI compatible):
+#   provider: "openai"
+#   base_url: "https://models-proxy.stepfun-inc.com/v1"
+#   api_key: "your_stepfun_api_key"
+#   model_name: "step-1o-turbo-vision"
+#
+# Google Gemini:
+#   provider: "gemini"
+#   base_url: "https://generativelanguage.googleapis.com/v1beta"
+#   api_key: "your_gemini_api_key"
+#   model_name: "gemini-2.0-flash"
+#
+# Local Ollama:
+#   provider: "ollama"
+#   base_url: "http://localhost:11434"
+#   api_key: ""  # Ollama usually doesn't require an API key
+#   model_name: "llama3.2:1b"
+# ==================================================
 
 llm:
+  provider: "openai"
   base_url: "https://api.deepseek.com"
   #YOUR_DEEPSEEK_API_KEY
   api_key: null 
   model_name: "deepseek-chat"
 
 llm_thinking:
+  provider: "openai"
   base_url: "https://api.deepseek.com"
   #YOUR_DEEPSEEK_API_KEY
   api_key: null 
   model_name: "deepseek-reasoner"
 
 vlm:
+  provider: "openai"
   base_url: "https://api.stepfun.com/v1"
   #YOUR_STEPFUN_API_KEY
   api_key: null 
   model_name: "step-1o-turbo-vision"
-
 
 
 data_agents_config:
