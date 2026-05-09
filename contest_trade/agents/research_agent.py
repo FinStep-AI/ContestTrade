@@ -217,7 +217,7 @@ class ResearchAgent:
 
     async def _tool_selection(self, state: ResearchAgentState) -> ResearchAgentState:
         """选择工具"""
-        if not self.react:
+        if not self.react or state["tool_call_count"] >= self.config.max_react_step:
             state["selected_tool"] = {"tool_name": "final_report"}
             return state
 
@@ -259,10 +259,11 @@ class ResearchAgent:
                 return "enough_information"
 
             selected_tool = state["selected_tool"]
+            if state["tool_call_count"] >= self.config.max_react_step:
+                return "enough_information"
             if "error" in selected_tool:
                 return "not_enough_information"
-            if selected_tool["tool_name"] == "final_report" or \
-                state["tool_call_count"] >= self.config.max_react_step:
+            if selected_tool["tool_name"] == "final_report":
                 return "enough_information"
         except Exception as e:
             logger.error(f"Error in enough_information: {e}")
@@ -273,6 +274,14 @@ class ResearchAgent:
         """调用工具"""
         selected_tool = state["selected_tool"]
         try:
+            if "error" in selected_tool:
+                state["tool_call_count"] += 1
+                state["tool_call_context"] += json.dumps({
+                    "tool_called": selected_tool,
+                    "tool_result": selected_tool,
+                }, ensure_ascii=False) + "\n"
+                return state
+
             print('Begin to call tool: ', selected_tool)
             tool_name = selected_tool["tool_name"]
             tool_args = selected_tool["properties"]
@@ -457,4 +466,3 @@ if __name__ == "__main__":
     )
     agent_output = asyncio.run(agent.run_with_monitoring(agent_input))
     print(agent_output.to_dict())
-

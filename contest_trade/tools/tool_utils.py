@@ -63,7 +63,7 @@ class ToolManager:
             module = importlib.import_module(module_name)
             func = getattr(module, func_name)
             
-            if not callable(func):
+            if not callable(func) and not hasattr(func, 'invoke'):
                 raise ValueError(f"{module_path} is not callable")
             
             return self.register_function(func)
@@ -341,4 +341,3 @@ if __name__ == "__main__":
     # call tool
     result = asyncio.run(registry.call_tool("print_string", {"input_string": "Hello World!"}))
     print(result)
-
