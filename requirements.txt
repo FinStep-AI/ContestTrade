@@ -18,3 +18,4 @@ tabulate
 akshare
 crawl4ai
 lightgbm
+python-dotenv

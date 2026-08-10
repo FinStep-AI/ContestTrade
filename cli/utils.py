@@ -57,16 +57,52 @@ def validate_tushare_connection():
 def validate_llm_connection():
     """验证LLM连接"""
     try:
-        # Import LLM model when needed
-        from contest_trade.models.llm_model import GLOBAL_LLM
-        
+        from contest_trade.models.llm_model import GLOBAL_LLM, GLOBAL_LLM_CONFIG
+        from contest_trade.models.provider_auth import (
+            format_missing_key_error,
+            get_env_config_hints,
+            get_env_var_candidates,
+            resolve_api_key,
+        )
+
         console.print("🔍 [cyan]正在验证LLM配置...[/cyan]")
+        console.print(
+            f"  Provider: {GLOBAL_LLM_CONFIG.provider} | "
+            f"Model: Kimi K3 ({GLOBAL_LLM_CONFIG.model_name}) | "
+            f"Base URL: {GLOBAL_LLM_CONFIG.base_url or '—'}"
+        )
+
+        resolved_key = resolve_api_key(
+            GLOBAL_LLM_CONFIG.provider,
+            config_key=GLOBAL_LLM_CONFIG.api_key,
+            base_url=GLOBAL_LLM_CONFIG.base_url,
+        )
+        if not resolved_key:
+            env_vars = get_env_var_candidates(
+                GLOBAL_LLM_CONFIG.provider,
+                GLOBAL_LLM_CONFIG.base_url,
+            )
+            console.print(
+                f"❌ [red]{format_missing_key_error(GLOBAL_LLM_CONFIG.provider, GLOBAL_LLM_CONFIG.base_url)}[/red]"
+            )
+            console.print(f"   请在 .env 中设置: {', '.join(env_vars[:3])}")
+            for hint in get_env_config_hints(
+                GLOBAL_LLM_CONFIG.provider,
+                GLOBAL_LLM_CONFIG.base_url,
+            ):
+                console.print(f"   ⚠️  [yellow]{hint}[/yellow]")
+            return False
+
         test_messages = [
             {"role": "user", "content": "请回复'连接测试成功'，不要添加任何其他内容。"}
         ]
-        result = GLOBAL_LLM.run(test_messages, max_tokens=1, temperature=0.1, max_retries=0)
-        if result and hasattr(result, 'content') and result.content:
-            console.print(f"✅ [green]LLM连接成功[/green] - 模型: {GLOBAL_LLM.model_name}")
+        result = GLOBAL_LLM.run(test_messages, max_tokens=32, temperature=1, max_retries=0)
+        has_content = result and (
+            (hasattr(result, 'content') and result.content)
+            or (hasattr(result, 'reasoning_content') and result.reasoning_content)
+        )
+        if has_content:
+            console.print(f"✅ [green]LLM连接成功[/green] - 模型: Kimi K3 ({GLOBAL_LLM.model_name})")
             return True
         else:
             console.print("❌ [red]LLM连接失败 - 无响应内容[/red]")

@@ -16,8 +16,10 @@ finnhub_key: ""
 #YOUR_ALPHA_VANTAGE_KEY
 alpha_vantage_key: ""
 
-# YOUR_POLYGON_KEY
+#YOUR_POLYGON_KEY
 polygon_key: ""
+
+# API keys: set in config.yaml, or copy .env.example to .env (see DEEPSEEK_API_KEY, STEPFUN_API_KEY, LLM_API_KEY)
 
 llm:
   provider: "openai"

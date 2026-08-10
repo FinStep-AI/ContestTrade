@@ -21,7 +21,7 @@ from loguru import logger
 
 
 class SinaNewsCrawl(DataSourceBase):
-    def __init__(self, start_page=1, end_page=50):
+    def __init__(self, start_page=1, end_page=20):
         super().__init__("sina_news_crawl")
         self.start_page = start_page
         self.end_page = end_page
@@ -35,7 +35,7 @@ class SinaNewsCrawl(DataSourceBase):
         }
         self.all_items = []
         self.fetch_full_intro = True  # 是否抓取文章页以补全 intro
-        self.article_concurrency = 2 # 控制抓取文章页的并发
+        self.article_concurrency = 10 # 控制抓取文章页的并发
         
     async def fetch_page(self, session, page):
         """异步获取单个页面的数据"""

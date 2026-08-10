@@ -1,12 +1,28 @@
 """
 ContestTrade: 基于内部竞赛机制的Multi-Agent交易系统
 """
+from pathlib import Path
+
+
+def _bootstrap_dotenv() -> None:
+    """Load .env before any config/LLM imports."""
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.is_file():
+        return
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(env_path, override=False)
+    except ImportError:
+        pass
+
+
+_bootstrap_dotenv()
+
 import asyncio
 import sys
 import json
 import re
 import os
-from pathlib import Path
 from typing import Optional, Dict
 from datetime import datetime
 from collections import deque

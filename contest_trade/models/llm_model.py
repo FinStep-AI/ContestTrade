@@ -19,6 +19,14 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 from config.config import cfg
 
+from models.provider_auth import (
+    format_missing_key_error,
+    is_openai_compatible,
+    normalize_secret,
+    normalize_temperature,
+    resolve_api_key,
+    resolve_base_url,
+)
 from models.base_agent_model import (
     BaseAgentModel,
     AsyncResponseStream,
@@ -33,9 +41,21 @@ class ProviderType(Enum):
     GEMINI = "gemini"
     OLLAMA = "ollama"
 
+
+def _normalize_provider(provider: str) -> str:
+    """Map provider aliases to transport provider."""
+    normalized = (provider or "openai").lower().strip()
+    if is_openai_compatible(normalized):
+        return ProviderType.OPENAI.value
+    if normalized == ProviderType.GEMINI.value:
+        return ProviderType.GEMINI.value
+    if normalized == ProviderType.OLLAMA.value:
+        return ProviderType.OLLAMA.value
+    return normalized
+
 class LLMModelConfig:
     def __init__(self, provider: str, model_name: str, api_key: str = None, base_url: str = None,
-                 max_retries: int = 3, retry_delay: float = 20.0, timeout: float = 60.0, 
+                 max_retries: int = 3, retry_delay: float = 3.0, timeout: float = 60.0,
                  extra_headers: dict = None, proxys: dict = None, **kwargs):
         self.provider = provider
         self.model_name = model_name
@@ -93,11 +113,13 @@ class OpenAIProvider(BaseProvider):
         except ImportError:
             raise ImportError("openai package is required for OpenAI provider. Install with: pip install openai")
         
-        # Set default values from environment if not provided
-        if self.api_key is None:
-            self.api_key = os.environ.get("OPENAI_API_KEY")
-        if self.base_url is None:
-            self.base_url = os.environ.get("OPENAI_BASE_URL")
+        # Resolve credentials: config -> provider env vars -> generic fallback
+        self.api_key = resolve_api_key(
+            config.provider,
+            config_key=self.api_key,
+            base_url=self.base_url,
+        )
+        self.base_url = resolve_base_url(config.provider, config_base_url=self.base_url)
         
         # Initialize clients (lazy initialization if no API key)
         if self.api_key:
@@ -125,7 +147,10 @@ class OpenAIProvider(BaseProvider):
         """Ensure OpenAI clients are initialized."""
         if self.async_client is None:
             if not self.api_key:
-                raise ValueError("OpenAI API key is required but not provided. Set it in config or OPENAI_API_KEY environment variable.")
+                raise ValueError(format_missing_key_error(
+                    self.config.provider,
+                    base_url=self.base_url,
+                ))
             
             self.client = OpenAI(
                 api_key=self.api_key,
@@ -147,6 +172,7 @@ class OpenAIProvider(BaseProvider):
                            max_tokens: Optional[int], **kwargs) -> Any:
         self._ensure_clients()  # Ensure clients are initialized
         processed_messages = self.preprocess_messages(messages)
+        temperature = normalize_temperature(self.base_url, temperature)
         
         params = {
             "model": self.model_name,
@@ -200,12 +226,19 @@ class GeminiProvider(BaseProvider):
         except ImportError:
             raise ImportError("google-generativeai package is required for Gemini provider. Install with: pip install google-generativeai")
         
-        # Set API key
-        if self.api_key is None:
-            self.api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-        
-        if self.api_key:
-            genai.configure(api_key=self.api_key)
+        self.api_key = resolve_api_key(
+            ProviderType.GEMINI.value,
+            config_key=self.api_key,
+            base_url=self.base_url,
+        )
+        if not self.api_key:
+            raise ValueError(format_missing_key_error(
+                ProviderType.GEMINI.value,
+                base_url=self.base_url,
+                config_path="llm.api_key",
+            ))
+
+        genai.configure(api_key=self.api_key)
         
         # Configure model
         generation_config = {
@@ -287,13 +320,15 @@ class OllamaProvider(BaseProvider):
     def __init__(self, config: LLMModelConfig):
         super().__init__(config)
         
-        # Set default base URL for Ollama
-        if self.base_url is None:
-            self.base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-        
-        # Ollama doesn't typically require API keys, but support it if provided
-        if self.api_key is None:
-            self.api_key = os.environ.get("OLLAMA_API_KEY")
+        self.base_url = resolve_base_url(
+            ProviderType.OLLAMA.value,
+            config_base_url=self.base_url,
+        ) or "http://localhost:11434"
+        self.api_key = resolve_api_key(
+            ProviderType.OLLAMA.value,
+            config_key=self.api_key,
+            base_url=self.base_url,
+        )
     
     async def create_stream(self, messages: List[Dict[str, str]], temperature: float, 
                            max_tokens: Optional[int], **kwargs) -> Any:
@@ -359,8 +394,8 @@ class OllamaProvider(BaseProvider):
 
 def create_provider(config: LLMModelConfig) -> BaseProvider:
     """Factory function to create the appropriate provider based on config."""
-    provider_type = config.provider.lower()
-    
+    provider_type = _normalize_provider(config.provider)
+
     if provider_type == ProviderType.OPENAI.value:
         return OpenAIProvider(config)
     elif provider_type == ProviderType.GEMINI.value:
@@ -368,7 +403,8 @@ def create_provider(config: LLMModelConfig) -> BaseProvider:
     elif provider_type == ProviderType.OLLAMA.value:
         return OllamaProvider(config)
     else:
-        raise ValueError(f"Unsupported provider: {provider_type}. Supported providers: {[p.value for p in ProviderType]}")
+        supported = sorted({p.value for p in ProviderType} | {"deepseek", "stepfun", "moonshot", "qwen", "zhipu"})
+        raise ValueError(f"Unsupported provider: {config.provider}. Supported providers: {supported}")
 
 
 class LLMModel(BaseAgentModel):
@@ -669,39 +705,54 @@ def detect_provider(model_name: str, base_url: str = None) -> str:
     return ProviderType.OPENAI.value
 
 
+def _build_llm_config(section: dict, fallback_section: dict = None) -> LLMModelConfig:
+    """Build LLMModelConfig with provider-aware credential resolution."""
+    provider = section.get("provider", detect_provider(section["model_name"], section.get("base_url")))
+    base_url = section.get("base_url")
+    api_key = resolve_api_key(
+        provider,
+        config_key=normalize_secret(section.get("api_key")),
+        base_url=base_url,
+    )
+    if api_key is None and fallback_section:
+        api_key = resolve_api_key(
+            fallback_section.get("provider", provider),
+            config_key=normalize_secret(fallback_section.get("api_key")),
+            base_url=fallback_section.get("base_url"),
+        )
+    return LLMModelConfig(
+        provider=provider,
+        model_name=section["model_name"],
+        api_key=api_key,
+        base_url=resolve_base_url(provider, base_url) or base_url,
+    )
+
+
 # Create global configurations with auto-detected providers
-llm_provider = cfg.llm.get("provider", detect_provider(cfg.llm["model_name"], cfg.llm.get("base_url")))
-GLOBAL_LLM_CONFIG = LLMModelConfig(
-    provider=llm_provider,
-    model_name=cfg.llm["model_name"],
-    api_key=cfg.llm.get("api_key"),
-    base_url=cfg.llm.get("base_url")
-)
+GLOBAL_LLM_CONFIG = _build_llm_config(cfg.llm)
 GLOBAL_LLM = LLMModel(GLOBAL_LLM_CONFIG)
 
 try:
-    thinking_provider = cfg.llm_thinking.get("provider", detect_provider(cfg.llm_thinking["model_name"], cfg.llm_thinking.get("base_url")))
-    GLOBAL_THINKING_LLM_CONFIG = LLMModelConfig(
-        provider=thinking_provider,
-        model_name=cfg.llm_thinking["model_name"],
-        api_key=cfg.llm_thinking.get("api_key"),
-        base_url=cfg.llm_thinking.get("base_url")
-    )
-    assert GLOBAL_THINKING_LLM_CONFIG.api_key is not None
+    GLOBAL_THINKING_LLM_CONFIG = _build_llm_config(cfg.llm_thinking, fallback_section=cfg.llm)
+    if GLOBAL_THINKING_LLM_CONFIG.api_key is None:
+        raise ValueError(format_missing_key_error(
+            GLOBAL_THINKING_LLM_CONFIG.provider,
+            base_url=GLOBAL_THINKING_LLM_CONFIG.base_url,
+            config_path="llm_thinking.api_key",
+        ))
     GLOBAL_THINKING_LLM = LLMModel(GLOBAL_THINKING_LLM_CONFIG)
 except Exception as e:
     print(f"加载thinking模型失败，使用llm模型替代: {e}")
     GLOBAL_THINKING_LLM = GLOBAL_LLM
 
 try:
-    vlm_provider = cfg.vlm.get("provider", detect_provider(cfg.vlm["model_name"], cfg.vlm.get("base_url")))
-    GLOBAL_VLM_CONFIG = LLMModelConfig(
-        provider=vlm_provider,
-        model_name=cfg.vlm["model_name"],
-        api_key=cfg.vlm.get("api_key"),
-        base_url=cfg.vlm.get("base_url")
-    )
-    assert GLOBAL_VLM_CONFIG.api_key is not None
+    GLOBAL_VLM_CONFIG = _build_llm_config(cfg.vlm, fallback_section=cfg.llm)
+    if GLOBAL_VLM_CONFIG.api_key is None:
+        raise ValueError(format_missing_key_error(
+            GLOBAL_VLM_CONFIG.provider,
+            base_url=GLOBAL_VLM_CONFIG.base_url,
+            config_path="vlm.api_key",
+        ))
     GLOBAL_VISION_LLM = LLMModel(GLOBAL_VLM_CONFIG)
 except Exception as e:
     print(f"加载vlm模型失败，vision能力不可用: {e}")

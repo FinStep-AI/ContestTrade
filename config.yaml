@@ -23,12 +23,28 @@ finnhub_key: ""
 #
 # 配置示例 / Configuration examples:
 #
+# 也可通过 .env 或环境变量设置 API Key（优先级低于 config.yaml）:
+#   1. 复制 .env.example 为 .env 并填入密钥
+#   2. DeepSeek  -> DEEPSEEK_API_KEY
+#   3. StepFun   -> STEPFUN_API_KEY
+#   4. OpenAI    -> OPENAI_API_KEY
+#   5. 通用      -> LLM_API_KEY
+#
 # OpenAI:
 #   provider: "openai"
 #   base_url: "https://api.openai.com/v1"
 #   api_key: "your_openai_api_key"
 #   model_name: "gpt-4"
 #
+# Kimi Code (OpenAI compatible):
+#   provider: "openai"
+#   base_url: "https://api.kimi.com/coding/v1"
+#   api_key: null   # 在 .env 中设置 KIMI_API_KEY（Kimi Code 控制台密钥）
+#   model_name: "kimi-k3"   # API model id；显示名称: Kimi K3
+#
+# Kimi Open Platform:
+#   base_url: "https://api.moonshot.ai/v1"
+#   model_name: "kimi-k3"
 # DeepSeek (OpenAI compatible):
 #   provider: "openai"
 #   base_url: "https://api.deepseek.com"
@@ -57,23 +73,20 @@ finnhub_key: ""
 llm:
   provider: "openai"
   base_url: "https://api.deepseek.com"
-  #YOUR_DEEPSEEK_API_KEY
-  api_key: null 
+  api_key: null
   model_name: "deepseek-chat"
 
 llm_thinking:
   provider: "openai"
   base_url: "https://api.deepseek.com"
-  #YOUR_DEEPSEEK_API_KEY
-  api_key: null 
+  api_key: null
   model_name: "deepseek-reasoner"
 
 vlm:
   provider: "openai"
-  base_url: "https://api.stepfun.com/v1"
-  #YOUR_STEPFUN_API_KEY
-  api_key: null 
-  model_name: "step-1o-turbo-vision"
+  base_url: "https://api.kimi.com/coding/v1"
+  api_key: null
+  model_name: "kimi-k3"
 
 
 data_agents_config:
@@ -92,7 +105,7 @@ data_agents_config:
 
 research_agent_config:
   belief_list_path: "config/belief_list.json"
-  max_react_step: 10
+  max_react_step: 5
   output_language: "中文"
   tools:
     - "tools.stock_symbol_search_akshare.stock_symbol_search"

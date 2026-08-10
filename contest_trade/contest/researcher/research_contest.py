@@ -19,6 +19,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 sys.path.append(str(PROJECT_ROOT))
 
 from models.llm_model import GLOBAL_LLM
+from models.provider_auth import resolve_api_key, resolve_base_url, resolve_chat_completions_url
 from utils.market_manager import GLOBAL_MARKET_MANAGER
 from config.config import cfg
 from research_contest_types import SignalData, ResearchContestResult
@@ -316,10 +317,17 @@ class ResearchContest:
         """获取当天信号的judge评分"""
         logger.info(f"获取当天信号judge评分 - {len(current_signals)} 个信号")
         
+        llm_section = cfg.llm if isinstance(cfg.llm, dict) else vars(cfg.llm)
+        provider = llm_section.get("provider", "openai")
+        base_url = resolve_base_url(provider, llm_section.get("base_url"))
         llm_config = {
-            "api_key": cfg.llm.api_key,
-            "api_base": cfg.llm.api_base,
-            "model_name": cfg.llm.model_name
+            "api_key": resolve_api_key(
+                provider,
+                config_key=llm_section.get("api_key"),
+                base_url=base_url,
+            ),
+            "api_base": resolve_chat_completions_url(base_url),
+            "model_name": llm_section.get("model_name"),
         }
         
         judge_scores = await self.signal_judger.judge_signals(
